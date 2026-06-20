@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>67 Hyper-Drop: Advanced WebGL Engine Standard Edition</title>
+    <style>
+        :root {
+            --neon-cyan: #00ffff;
+            --neon-pink: #ff0055;
+            --neon-yellow: #ffff00;
+            --neon-purple: #9d00ff;
+            --neon-green: #00ff66;
+            --matrix-dark: #020208;
+            --panel-bg: rgba(4, 4, 14, 0.9);
+            --panel-border: rgba(0, 255, 255, 0.25);
+            --panel-glow: 0 0 20px rgba(0, 255, 255, 0.15);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-user-select: none;
+            user-select: none;
+            outline: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--matrix-dark);
+            font-family: 'Courier New', monospace;
+            color: #ffffff;
+        }
+
+        #canvas-render-viewport {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        #hud-global-orchestrator {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 320px 1fr 320px;
+            grid-template-rows: 220px 1fr 240px;
+            gap: 15px;
+        }
+
+        .hud-matrix-node {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 4px;
+            padding: 15px;
+            pointer-events: auto;
+            box-shadow: var(--panel-glow), inset 0 0 15px rgba(0,255,255,0.05);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        .hud-matrix-node:hover {
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.3);
+        }
+
+        .node-header {
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            color: rgba(255, 255, 255, 0.4);
+            border-bottom: 1px dashed rgba(0, 255, 255, 0.2);
+            padding-bottom: 6px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .node-header .status-dot {
+            width: 6px;
+            height: 6px;
+            background-color: var(--neon-green);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--neon-green);
+            animation: pulse-glow 1.5s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; }
+            100% { opacity: 0.4; }
+        }
+
+        .data-metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+
+        .data-metric-label {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .data-metric-value {
+            font-weight: bold;
+            color: var(--neon-cyan);
+            text-shadow: 0 0 8px rgba(0, 255, 255, 0.6);
+        }
+
+        .bar-container-wrapper {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 4px;
+            margin-bottom: 10px;
+        }
+
+        .bar-fill-element {
+            height: 100%;
+            width: 100%;
+            transition: width 0.2s cubic-bezier(0.2, 0.8, 0.4, 1);
+        }
+
+        #hull-integrity-fill {
+            background: linear-gradient(90deg, var(--neon-pink), #ff00aa);
+            box-shadow: 0 0 10px var(--neon-pink);
+        }
+
+        #energy-reserve-fill {
+            background: linear-gradient(90deg, var(--neon-purple), var(--neon-cyan));
+            box-shadow: 0 0 10px var(--neon-cyan);
+            width: 85%;
+        }
+
+        #panel-telemetry-left {
+            grid-column: 1;
+            grid-row: 1;
+            border-left: 4px solid var(--neon-cyan);
+        }
+
+        #panel-environment-right {
+            grid-column: 3;
+            grid-row: 1;
+            border-right: 4px solid var(--neon-cyan);
+            align-items: flex-end;
+        }
+
+        .matrix-action-button-group {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+            margin-top: 5px;
+        }
+
+        .matrix-action-btn {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--neon-cyan);
+            color: var(--neon-cyan);
+            padding: 8px;
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .matrix-action-btn.active {
+            background: var(--neon-cyan);
+            color: #000000;
+            box-shadow: 0 0 15px var(--neon-cyan);
+        }
+
+        .matrix-action-btn:active {
+            transform: scale(0.96);
+        }
+
+        #panel-console-logger {
+            grid-column: 1;
+            grid-row: 3;
+            height: 100%;
+            font-size: 10px;
+            overflow: hidden;
+        }
+
+        #console-terminal-stream-box {
+            width: 100%;
+            height: 100%;
+            overflow-y: hidden;
+            color: rgba(0, 255, 102, 0.85);
+            line-height: 1.4;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+
+        .terminal-line {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .terminal-line .timestamp {
+            color: rgba(255, 255, 255, 0.3);
+            margin-right: 6px;
+        }
+
+        #panel-radar-visualizer {
+            grid-column: 3;
+            grid-row: 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .radar-vector-scope {
+            width: 130px;
+            height: 130px;
+            border: 1px solid rgba(0, 255, 255, 0.25);
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .radar-vector-scope::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background: linear-gradient(from 0deg, rgba(0,255,255,0.15), transparent 50%);
+            animation: radar-sweep 3s linear infinite;
+            transform-origin: center;
+        }
+
+        @keyframes radar-sweep {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .radar-crosshair-h {
+            position: absolute;
+            width: 100%;
+            height: 1px;
+            background: rgba(0, 255, 255, 0.15);
+            top: 50%;
+            left: 0;
+        }
+
+        .radar-crosshair-v {
+            position: absolute;
+            width: 1px;
+            height: 100%;
+            background: rgba(0, 255, 255, 0.15);
+            left: 50%;
+            top: 0;
+        }
+
+        #panel-ipad-tactile-surface {
+            grid-column: 2;
+            grid-row: 3;
+            width: 360px;
+            justify-self: center;
+            background: rgba(4, 4, 12, 0.4);
+            border: 1px dashed rgba(0, 255, 255, 0.2);
+            text-align: center;
+            height: 100px;
+            align-self: flex-end;
+            margin-bottom: 5px;
+        }
+
+        .tactile-lane-indicator-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            width: 100%;
+            margin-top: 10px;
+            height: 40px;
+        }
+
+        .lane-box-node {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.3);
+            font-weight: bold;
+            transition: all 0.15s ease;
+        }
+
+        .lane-box-node.active-trace {
+            background: rgba(0, 255, 255, 0.12);
+            color: var(--neon-cyan);
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
+        }
+
+        #system-crash-mask-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle, rgba(16, 2, 8, 0.99) 0%, rgba(2, 2, 6, 1) 100%);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s cubic-bezier(0.1, 0.9, 0.2, 1);
+        }
+
+        #system-crash-mask-layer.triggered {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .terminal-critical-title {
+            color: var(--neon-pink);
+            font-size: 24px;
+            font-weight: bold;
+            letter-spacing: 3px;
+            text-shadow: 0 0 20px rgba(255,0,85,0.5);
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        .crash-terminal-codeblock {
+            width: 85%;
+            max-width: 600px;
+            background: #000000;
+            border: 1px solid rgba(255,0,85,0.25);
+            border-radius: 4px;
+            padding: 20px;
+            font-size: 12px;
+            color: #bbbbbb;
+            line-height: 1.5;
+            margin-bottom: 30px;
+            height: 200px;
+            overflow-y: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .accent-yellow-text { color: var(--neon-yellow); }
+        .accent-cyan-text { color: var(--neon-cyan); }
+
+        .cold-reboot-trigger-button {
+            background: transparent;
+            color: var(--neon-cyan);
+            border: 2px solid var(--neon-cyan);
+            padding: 12px 35px;
+            font-size: 13px;
+            font-weight: bold;
+            font-family: inherit;
+            letter-spacing: 2px;
+            border-radius: 4px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0,255,255,0.1);
+            transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .cold-reboot-trigger-button:hover {
+            background: var(--neon-cyan);
+            color: #000000;
+            box-shadow: 0 0 30px var(--neon-cyan);
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="canvas-render-viewport"></div>
+
+    <div id="hud-global-orchestrator">
+        
+        <div id="panel-telemetry-left" class="hud-matrix-node">
+            <div class="node-header">
+                <span>SYSTEM_TELEMETRY</span>
+                <span class="status-dot"></span>
+            </div>
+            <div class="data-metric-row">
+                <span class="data-metric-label">KERNEL_SIGNATURE</span>
+                <span class="data-metric-value">67_HYPER_CORE_V4.0</span>
+            </div>
+            <div class="data-metric-row">
+                <span class="data-metric-label">DESCENT_DEPTH</span>
+                <span class="data-metric-value" id="val-score-node">00000 METERS</span>
+            </div>
+            <div class="data-metric-row">
+                <span class="data-metric-label">VELOCITY_SCALAR</span>
+                <span class="data-metric-value" id="val-speed-node" style="color: var(--neon-yellow); text-shadow: 0 0 8px rgba(2ffff,0,0,0.5);">1.00x</span>
+            </div>
+            <div class="data-metric-row" style="margin-bottom: 2px;">
+                <span class="data-metric-label">HULL_INTEGRITY</span>
+                <span class="data-metric-value" id="val-hp-node" style="color: var(--neon-pink); text-shadow: 0 0 8px rgba(255,0,85,0.5);">100%</span>
+            </div>
+            <div class="bar-container-wrapper">
+                <div id="hull-integrity-fill" class="bar-fill-element"></div>
+            </div>
+            <div class="data-metric-row" style="margin-bottom: 2px;">
+                <span class="data-metric-label">SHIELD_CAPACITOR</span>
+                <span class="data-metric-value" style="color: var(--neon-purple); text-shadow: 0 0 8px rgba(157,0,255,0.5);">85%</span>
+            </div>
+            <div class="bar-container-wrapper">
+                <div id="energy-reserve-fill" class="bar-fill-element"></div>
+            </div>
+        </div>
+
+        <div id="panel-environment-right" class="hud-matrix-node">
+            <div class="node-header" style="width: 100%;">
+                <span>ENVIRONMENT_MATRIX</span>
+                <span class="status-dot" style="background-color: var(--neon-yellow); box-shadow: 0 0 8px var(--neon-yellow);"></span>
+            </div>
+            <div class="data-metric-row" style="width: 100%;">
+                <span class="data-metric-label">ATMOSPHERE_PHASE</span>
+                <span class="data-metric-value" id="val-phase-string-node" style="color: var(--neon-yellow);">NIGHT_ORBITAL</span>
+            </div>
+            <div class="data-metric-row" style="width: 100%;">
+                <span class="data-metric-label">RAYLEIGH_SCATTER</span>
+                <span class="data-metric-value" id="val-scatter-coeff-node">0.0483</span>
+            </div>
+            <div class="matrix-action-button-group">
+                <button id="btn-phase-day-select" class="matrix-action-btn" onclick="EngineCore.RouteEnvironmentPhase('DAY')">DAY_MODE</button>
+                <button id="btn-phase-night-select" class="matrix-action-btn active" onclick="EngineCore.RouteEnvironmentPhase('NIGHT')">NIGHT_MODE</button>
+            </div>
+        </div>
+
+        <div id="panel-console-logger" class="hud-matrix-node">
+            <div class="node-header">
+                <span>TERMINAL_FEED_STREAM</span>
+                <span class="status-dot" style="background-color: var(--neon-cyan);"></span>
+            </div>
+            <div id="console-terminal-stream-box"></div>
+        </div>
+
+        <div id="panel-ipad-tactile-surface" class="hud-matrix-node">
+            <div class="node-header">
+                <span>IPAD_TAC_SURFACE_INTERCEPTOR</span>
+            </div>
+            <div class="tactile-lane-indicator-grid">
+                <div id="lane-node-0" class="lane-box-node">L_PLANE_VECTOR</div>
+                <div id="lane-node-1" class="lane-box-node active-trace">CENTER_NAV_BASE</div>
+                <div id="lane-node-2" class="lane-box-node">R_PLANE_VECTOR</div>
+            </div>
+        </div>
+
+        <div id="panel-radar-visualizer" class="hud-matrix-node">
+            <div class="node-header" style="width: 100%;">
+                <span>RADAR_PROXIMITY</span>
+            </div>
+            <div class="radar-vector-scope">
+                <div class="radar-crosshair-h"></div>
+                <div class="radar-crosshair-v"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="system-crash-mask-layer">
+        <div class="terminal-critical-title">CRITICAL_SYSTEM_HARDWARE_TERMINATION</div>
+        <div class="crash-terminal-codeblock" id="crash-terminal-stream-output-box"></div>
+        <button class="cold-reboot-trigger-button" onclick="EngineCore.TriggerColdRebootSequence()">EXECUTE_COLD_REBOOT</button>
+    </div>
+
+    <script type="x-shader/x-vertex" id="vertex-shader-plasma-core">
+        uniform float uTime;
+        varying vec2 vUv;
+        varying vec3 vNormalVector;
+        varying vec3 vModelViewPositionVector;
+        
+        // Custom math implementation of 3D Simplex Noise transformations inside the shader pipeline
+        vec4 permutation3D(vec4 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
+        float calculateSimplexNoise3D(vec3 v) {
+            const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+            const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+            vec3 i  = floor(v + dot(v, C.yyy));
+            vec3 x0 = v - i + dot(i, C.xxx);
+            vec3 g = step(x0.yzx, x0.xyz);
+            vec3 l = 1.0 - g;
+            vec3 i1 = min(g.xyz, l.zxy);
+            vec3 i2 = max(g.xyz, l.zxy);
+            vec3 x1 = x0 - i1 + 1.0 * C.xxx;
+            vec3 x2 = x0 - i2 + 2.0 * C.xxx;
+            vec3 x3 = x0 - D.yyy;
+            i = mod(i, 289.0);
+            vec4 p = permutation3D(permutation3D(permutation3D(
+                        i.z + vec4(0.0, i1.z, i2.z, 1.0))
+                    + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+                    + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+            float n_ = 0.142857142857;
+            vec3 ns = n_ * D.wyz - D.xzx;
+            vec4 j = p - 49.0 * floor(p * ns.z);
+            vec4 x_ = floor(j * ns.z);
+            vec4 y_ = floor(j - 7.0 * x_);
+            vec4 x = x_ *ns.x + ns.yyyy;
+            vec4 y = y_ *ns.x + ns.yyyy;
+            vec4 h = 1.0 - abs(x) - abs(y);
+            vec4 b0 = vec4(x.xy, y.xy);
+            vec4 b1 = vec4(x.zw, y.zw);
+            vec4 s0 = floor(b0)*2.0 + 1.0;
+            vec4 s1 = floor(b1)*2.0 + 1.0;
+            vec4 sh = -step(h, vec4(0.0));
+            vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
+            vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+            vec3 p0 = vec3(a0.xy, h.x);
+            vec3 p1 = vec3(a0.zw, h.y);
+            vec3 p2 = vec3(a1.xy, h.z);
+            vec3 p3 = vec3(a1.zw, h.w);
+            vec4 norm = 1.79284291400159 - 0.85373472095314 * vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3));
+            p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+            vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+            m = m * m;
+            return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+        }
+
+        void main() {
+            vUv = uv;
+            vNormalVector = normalize(normalMatrix * normal);
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            vModelViewPositionVector = -mvPosition.xyz;
+            
+            // Generate vertex deformation matrix via time-stamped noise algorithms
+            float noiseDisplacement = calculateSimplexNoise3D(vec3(position.x * 2.5, position.y * 1.5 + uTime * 8.0, position.z * 2.5)) * 0.15;
+            vec3 expandedVertexPosition = position + normal * noiseDisplacement;
+            
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(expandedVertexPosition, 1.0);
+        }
+    </script>
+
+    <script type="x-shader/x-fragment" id="fragment-shader-plasma-core">
+        uniform float uTime;
+        uniform vec3 uBaseColorMatrix;
+        varying vec2 vUv;
+        varying vec3 vNormalVector;
+        varying vec3 vModelViewPositionVector;
+
+        void main() {
+            // Intense edge emission calculations using high precision analytical vectors
+            vec3 normalizedNormal = normalize(vNormalVector);
+            vec3 normalizedView = normalize(vModelViewPositionVector);
+            float fresnelRimCoefficient = 1.0 - max(dot(normalizedNormal, normalizedView), 0.0);
+            float edgeGlowIntensity = pow(fresnelRimCoefficient, 4.0) * 5.0;
+            
+            // Primary and secondary thermal wave equations combined
+            float waveAlpha = sin(vUv.x * 15.0 + uTime * 12.0) * cos(vUv.y * 15.0 - uTime * 10.0);
+            float waveBeta = sin(vUv.y * 30.0 + uTime * 25.0) * 0.5 + 0.5;
+            float compositePlasmaNoise = (waveAlpha * waveBeta) + 0.3;
+            
+            vec3 dynamicColorPayload = uBaseColorMatrix * (compositePlasmaNoise * 2.0 + edgeGlowIntensity);
+            gl_FragColor = vec4(dynamicColorPayload, 1.0);
+        }
+    </script>
+
+    <script>
+        /**
+         * System Terminal Feed Interface Controller Object.
+         * Drives custom scrolling terminal lines inside HUD overlays.
+         */
+        const HUDTerminalStreamer = {
+            domElementRef: null,
+            maxLineCapacity: 12,
+            lineRegistryBuffer: [],
+
+            InitializeStreamer: function() {
+                this.domElementRef = document.getElementById('console-terminal-stream-box');
+                this.PushLogMessage("SYSTEM_KERNEL_INTRUSION_DETECTED... STATUS: OK");
+                this.PushLogMessage("WEBGL_HARDWARE_ACCELERATION: ACTIVE");
+            },
+
+            PushLogMessage: function(messageText) {
+                if (!this.domElementRef) return;
+                
+                const currentTime = new Date();
+                const pad = (num) => String(num).padStart(2, '0');
+                const timestampString = `[${pad(currentTime.getHours())}:${pad(currentTime.getMinutes())}:${pad(currentTime.getSeconds())}]`;
+                
+                this.lineRegistryBuffer.push({ time: timestampString, txt: messageText });
+                if (this.lineRegistryBuffer.length > this.maxLineCapacity) {
+                    this.lineRegistryBuffer.shift();
+                }
+                this.RenderTerminalDOM();
+            },
+
+            RenderTerminalDOM: function() {
+                let compositeHTMLBuffer = "";
+                for(let i = 0; i < this.lineRegistryBuffer.length; i++) {
+                    const line = this.lineRegistryBuffer[i];
+                    compositeHTMLBuffer += `<div class="terminal-line"><span class="timestamp">${line.time}</span>>> ${line.txt}</div>`;
+                }
+                this.domElementRef.innerHTML = compositeHTMLBuffer;
+            },
+
+            ClearLogBuffer: function() {
+                this.lineRegistryBuffer = [];
+                if (this.domElementRef) this.domElementRef.innerHTML = "";
+            }
+        };
+
+        /**
+         * High Precision Tactile Grid Parsing Array Matrix.
+         * Safely decodes iPad continuous touch interactions with exponential damping.
+         */
+        const iPadTactileHardwareMatrix = {
+            trackingAnchorX: 0,
+            trackingAnchorY: 0,
+            currentActiveZoneIndex: 1,
+            windowWidthThresholdScale: 0.33,
+            isPointerDownState: false,
+
+            InitializeHardwareListeners: function() {
+                window.addEventListener('touchstart', (e) => this.ExecuteTouchStart(e), { passive: false });
+                window.addEventListener('touchmove', (e) => this.ExecuteTouchMove(e), { passive: false });
+                window.addEventListener('touchend', (e) => this.ExecuteTouchEnd(e), { passive: false });
+                
+                // Fallback mouse listener mappings
+                window.addEventListener('mousedown', (e) => this.ExecuteMouseDown(e));
+                window.addEventListener('mousemove', (e) => this.ExecuteMouseMove(e));
+                window.addEventListener('mouseup', () => this.ExecuteMouseUp());
+            },
+
+            ExecuteTouchStart: function(e) {
+                if (e.touches.length > 0) {
+                    this.isPointerDownState = true;
+                    this.trackingAnchorX = e.touches[0].clientX;
+                    this.trackingAnchorY = e.touches[0].clientY;
+                    this.EvaluateSpatialCoordinates(this.trackingAnchorX);
+                }
+            },
+
+            ExecuteTouchMove: function(e) {
+                if (e.touches.length > 0 && this.isPointerDownState) {
+                    let liveTouchPositionX = e.touches[0].clientX;
+                    this.EvaluateSpatialCoordinates(liveTouchPositionX);
+                }
+            },
+
+            ExecuteTouchEnd: function(e) {
+                this.isPointerDownState = false;
+                this.ResetSpatialZoneAllocation();
+            },
+
+            ExecuteMouseDown: function(e) {
+                this.isPointerDownState = true;
+                this.EvaluateSpatialCoordinates(e.clientX);
+            },
+
+            ExecuteMouseMove: function(e) {
+                if (e.isPointerDownState || this.isPointerDownState) {
+                    this.EvaluateSpatialCoordinates(e.clientX);
+                }
+            },
+
+            ExecuteMouseUp: function() {
+                this.isPointerDownState = false;
+                this.ResetSpatialZoneAllocation();
+            },
+
+            EvaluateSpatialCoordinates: function(pixelPositionX) {
+                const absoluteWidth = window.innerWidth;
+                const dynamicLeftBound = absoluteWidth * this.windowWidthThresholdScale;
+                const dynamicRightBound = absoluteWidth * (1.0 - this.windowWidthThresholdScale);
+                
+                let targetZoneDetected = 1;
+
+                if (pixelPositionX < dynamicLeftBound) {
+                    targetZoneDetected = 0;
+                } else if (pixelPositionX > dynamicRightBound) {
+                    targetZoneDetected = 2;
+                } else {
+                    targetZoneDetected = 1;
+                }
+
+                if (targetZoneDetected !== this.currentActiveZoneIndex) {
+                    this.currentActiveZoneIndex = targetZoneDetected;
+                    this.UpdateDOMTrackGrids(targetZoneDetected);
+                    this.DispatchSteeringSignal(targetZoneDetected);
+                }
+            },
+
+            UpdateDOMTrackGrids: function(activeZoneIndex) {
+                for (let i = 0; i < 3; i++) {
+                    const elementNode = document.getElementById(`lane-node-${i}`);
+                    if (elementNode) {
+                        if (i === activeZoneIndex) {
+                            elementNode.classList.add('active-trace');
+                        } else {
+                            elementNode.classList.remove('active-trace');
+                        }
+                    }
+                }
+            },
+
+            DispatchSteeringSignal: function(zoneIndex) {
+                let stringIdentifier = 'CENTER';
+                if (zoneIndex === 0) stringIdentifier = 'LEFT';
+                if (zoneIndex === 2) stringIdentifier = 'RIGHT';
+                
+                HUDTerminalStreamer.PushLogMessage(`STEERING_SIGNAL_DISPATCH: [${stringIdentifier}]`);
+                if (typeof FighterAerodynamics !== 'undefined' && FighterAerodynamics.ExecuteLaneShiftMatrix) {
+                    FighterAerodynamics.ExecuteLaneShiftMatrix(stringIdentifier);
+                }
+            },
+
+            ResetSpatialZoneAllocation: function() {
+                this.currentActiveZoneIndex = 1;
+                this.UpdateDOMTrackGrids(1);
+                this.DispatchSteeringSignal(1);
+            }
+        };
+
+        /**
+         * Global Master Architecture Core Control Engine.
+         * Runs explicit structural state machines and cross-module interface routings.
+         */
+        const EngineCore = {
+            activeSceneInstance: null,
+            activeCameraInstance: null,
+            activeRendererInstance: null,
+            internalGameProgressVelocity: 0.32,
+            globalMetricScoreCounter: 0,
+            activeStructuralHealthPool: 100,
+            systemClockTimelineTicker: 0.0,
+            isEngineCorePipelineRunning: false,
+
+            BootUpSequenceMainframe: function() {
+                HUDTerminalStreamer.InitializeStreamer();
+                iPadTactileHardwareMatrix.InitializeHardwareListeners();
+                
+                HUDTerminalStreamer.PushLogMessage("INITIALIZING_THREE_JS_SCENE_CONTEXT...");
+                this.activeSceneInstance = new THREE.Scene();
+                
+                this.activeCameraInstance = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.activeCameraInstance.position.set(0, 5.0, 8.0);
+                this.activeCameraInstance.lookAt(0, -0.5, 0);
+
+                this.activeRendererInstance = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+                this.activeRendererInstance.setSize(window.innerWidth, window.innerHeight);
+                this.activeRendererInstance.shadowMap.enabled = true;
+                this.activeRendererInstance.shadowMap.type = THREE.PCFSoftShadowMap;
+                
+                const viewportContainer = document.getElementById('canvas-render-viewport');
+                if (viewportContainer) {
+                    viewportContainer.appendChild(this.activeRendererInstance.domElement);
+                }
+
+                window.addEventListener('resize', () => this.HandleViewportResizeEvent());
+                
+                HUDTerminalStreamer.PushLogMessage("CONNECTING_MODULE_DEPENDENCY_REGISTERS...");
+                this.ExecuteCascadingModuleSpawns();
+                
+                this.isEngineCorePipelineRunning = true;
+                HUDTerminalStreamer.PushLogMessage("ENGINE_CORE_ONLINE_STATUS: COLD_START_OK");
+                
+                this.TriggerMainframeClockExecutionLoop();
+            },
+
+            ExecuteCascadingModuleSpawns: function() {
+                if (typeof EnvironmentLighting !== 'undefined' && EnvironmentLighting.InitializeLightingSystem) {
+                    EnvironmentLighting.InitializeLightingSystem(this.activeSceneInstance, this.activeRendererInstance);
+                    HUDTerminalStreamer.PushLogMessage("MODULE: EnvironmentLighting REGISTERED");
+                }
+                if (typeof ProceduralSkyscraper !== 'undefined' && ProceduralSkyscraper.BuildSkyscraperInfrastructure) {
+                    ProceduralSkyscraper.BuildSkyscraperInfrastructure(this.activeSceneInstance);
+                    HUDTerminalStreamer.PushLogMessage("MODULE: ProceduralSkyscraper REGISTERED");
+                }
+                if (typeof FighterAerodynamics !== 'undefined' && FighterAerodynamics.DeployFighterMeshNode) {
+                    FighterAerodynamics.DeployFighterMeshNode(this.activeSceneInstance);
+                    HUDTerminalStreamer.PushLogMessage("MODULE: FighterAerodynamics REGISTERED");
+                }
+            },
+
+            TriggerMainframeClockExecutionLoop: function() {
+                const coreClockTickPayload = () => {
+                    requestAnimationFrame(coreClockTickPayload);
+                    
+                    if (!this.isEngineCorePipelineRunning) return;
+
+                    this.systemClockTimelineTicker += 0.01667; // Stabilized baseline step scalar
+
+                    // Step A: Invoke lower-level file execution arrays across loops
+                    if (typeof EnvironmentLighting !== 'undefined' && EnvironmentLighting.UpdateEnvironmentFrame) {
+                        EnvironmentLighting.UpdateEnvironmentFrame(this.systemClockTimelineTicker);
+                    }
+                    if (typeof ProceduralSkyscraper !== 'undefined' && ProceduralSkyscraper.AnimateWallSegments) {
+                        ProceduralSkyscraper.AnimateWallSegments(this.internalGameProgressVelocity, EnvironmentLighting.interpolationDelta || 0);
+                    }
+                    if (typeof FighterAerodynamics !== 'undefined' && FighterAerodynamics.ProcessFlightDynamicsTick) {
+                        FighterAerodynamics.ProcessFlightDynamicsTick(this.systemClockTimelineTicker);
+                    }
+                    if (typeof ObstacleSpikeFactory !== 'undefined' && ObstacleSpikeFactory.ProcessActivePipeline) {
+                        ObstacleSpikeFactory.ProcessActivePipeline(this.activeSceneInstance, this.internalGameProgressVelocity, FighterAerodynamics.meshGroupNodeRef);
+                    }
+                    if (typeof CameraSpasmPhysics !== 'undefined' && CameraSpasmPhysics.ApplyCameraTremorMatrix) {
+                        CameraSpasmPhysics.ApplyCameraTremorMatrix(this.activeCameraInstance);
+                    }
+
+                    // Step B: Calculate operational scoring progressions
+                    this.globalMetricScoreCounter += 1;
+                    const scoreDisplayNode = document.getElementById('val-score-node');
+                    if (scoreDisplayNode) {
+                        scoreDisplayNode.innerText = String(this.globalMetricScoreCounter).padStart(5, '0') + " METERS";
+                    }
+
+                    // Step C: Gradually adjust system descent speed over traveled blocks
+                    this.internalGameProgressVelocity = 0.32 + (this.globalMetricScoreCounter * 0.00005);
+                    const speedDisplayNode = document.getElementById('val-speed-node');
+                    if (speedDisplayNode) {
+                        speedDisplayNode.innerText = (this.internalGameProgressVelocity / 0.32).toFixed(2) + 'x';
+                    }
+
+                    // Step D: Clean active memory map buffers into GPU rendering context
+                    this.activeRendererInstance.render(this.activeSceneInstance, this.activeCameraInstance);
+                };
+                coreClockTickPayload();
+            },
+
+            RouteEnvironmentPhase: function(phaseKeyString) {
+                if (typeof EnvironmentLighting !== 'undefined' && EnvironmentLighting.ModifySystemPhase) {
+                    EnvironmentLighting.ModifySystemPhase(phaseKeyString);
+                    HUDTerminalStreamer.PushLogMessage(`ENVIRONMENT_PHASE_CHANGED_TO: [${phaseKeyString}]`);
+                    
+                    const phaseTextNode = document.getElementById('val-phase-string-node');
+                    const dayBtn = document.getElementById('btn-phase-day-select');
+                    const nightBtn = document.getElementById('btn-phase-night-select');
+                    
+                    if (phaseTextNode) phaseTextNode.innerText = phaseKeyString + "_ORBITAL";
+                    if (phaseKeyString === 'DAY') {
+                        if(dayBtn) dayBtn.classList.add('active');
+                        if(nightBtn) nightBtn.classList.remove('active');
+                        const scatterNode = document.getElementById('val-scatter-coeff-node');
+                        if(scatterNode) scatterNode.innerText = "0.0221";
+                    } else {
+                        if(dayBtn) dayBtn.classList.remove('active');
+                        if(nightBtn) nightBtn.classList.add('active');
+                        const scatterNode = document.getElementById('val-scatter-coeff-node');
+                        if(scatterNode) scatterNode.innerText = "0.0483";
+                    }
+                }
+            },
+
+            ApplyStructureDamageDeduction: function(damageAmountValue) {
+                this.activeStructuralHealthPool -= damageAmountValue;
+                if (this.activeStructuralHealthPool < 0) this.activeStructuralHealthPool = 0;
+                
+                const hpTextNode = document.getElementById('val-hp-node');
+                const hpBarNode = document.getElementById('hull-integrity-fill');
+                
+                if (hpTextNode) hpTextNode.innerText = this.activeStructuralHealthPool + '%';
+                if (hpBarNode) hpBarNode.style.width = this.activeStructuralHealthPool + '%';
+                
+                HUDTerminalStreamer.PushLogMessage(`WARNING: CRITICAL_IMPACT_DETECTED. DAMAGE: -${damageAmountValue}%`);
+
+                if (this.activeStructuralHealthPool <= 0) {
+                    this.ExecuteEngineTerminationProtocol();
+                }
+            },
+
+            ExecuteEngineTerminationProtocol: function() {
+                this.isEngineCorePipelineRunning = false;
+                HUDTerminalStreamer.PushLogMessage("FATAL: HULL_INTEGRITY_COMPROMISED. HALTING_MAIN_CLOCK...");
+                
+                const finalScoreNode = document.getElementById('val-final-score');
+                const overlayMaskNode = document.getElementById('system-crash-mask-layer');
+                const crashTerminalNode = document.getElementById('crash-terminal-stream-output-box');
+                
+                if (overlayMaskNode) overlayMaskNode.classList.add('triggered');
+                
+                if (crashTerminalNode) {
+                    crashTerminalNode.innerHTML = `
+                        <div>[TRACE] CORE_CRASH_DUMP: ATOMIC_CLOCK_STOPPED</div>
+                        <div>[TRACE] METERS_TRACED: <span class="accent-cyan-text">${this.globalMetricScoreCounter} M</span></div>
+                        <div>[TRACE] FINAL_VELOCITY_COEFFICIENT: <span class="accent-yellow-text">${this.internalGameProgressVelocity.toFixed(4)}</span></div>
+                        <div>[TRACE] STRUCTURAL_INTEGRITY: 0.0000% (CRITICAL_FAILURE)</div>
+                        <div style="color: var(--neon-pink); margin-top: 10px;">[ERR] REBOOT_SEQUENCE_REQUESTED. COLD CLEAR REQUIRED...</div>
+                    `;
+                }
+            },
+
+            TriggerColdRebootSequence: function() {
+                HUDTerminalStreamer.PushLogMessage("EXECUTING_HARDWARE_COLD_REBOOT_SEQUENCES...");
+                
+                if (typeof ObstacleSpikeFactory !== 'undefined' && ObstacleSpikeFactory.ClearAllActiveNodes) {
+                    ObstacleSpikeFactory.ClearAllActiveNodes(this.activeSceneInstance);
+                }
+
+                this.globalMetricScoreCounter = 0;
+                this.activeStructuralHealthPool = 100;
+                this.internalGameProgressVelocity = 0.32;
+                
+                const hpTextNode = document.getElementById('val-hp-node');
+                const hpBarNode = document.getElementById('hull-integrity-fill');
+                const scoreTextNode = document.getElementById('val-score-node');
+                const speedTextNode = document.getElementById('val-speed-node');
+                const overlayMaskNode = document.getElementById('system-crash-mask-layer');
+                
+                if (hpTextNode) hpTextNode.innerText = '100%';
+                if (hpBarNode) hpBarNode.style.width = '100%';
+                if (scoreTextNode) scoreTextNode.innerText = '00000 METERS';
+                if (speedTextNode) speedTextNode.innerText = '1.00x';
+                if (overlayMaskNode) overlayMaskNode.classList.remove('triggered');
+
+                if (typeof FighterAerodynamics !== 'undefined' && FighterAerodynamics.ResetChassisPositionVector) {
+                    FighterAerodynamics.ResetChassisPositionVector();
+                }
+
+                HUDTerminalStreamer.ClearLogBuffer();
+                HUDTerminalStreamer.PushLogMessage("REBOOT_SUCCESSFUL. PIPELINE_RE_INITIALIZED.");
+                
+                this.isEngineCorePipelineRunning = true;
+            },
+
+            HandleViewportResizeEvent: function() {
+                if (this.activeCameraInstance && this.activeRendererInstance) {
+                    this.activeCameraInstance.aspect = window.innerWidth / window.innerHeight;
+                    this.activeCameraInstance.updateProjectionMatrix();
+                    this.activeRendererInstance.setSize(window.innerWidth, window.innerHeight);
+                    HUDTerminalStreamer.PushLogMessage(`VIEWPORT_RESIZED: [${window.innerWidth}x${window.innerHeight}]`);
+                }
+            }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            EngineCore.BootUpSequenceMainframe();
+        });
+    </script>
+
+    <script src="EnvironmentLighting.js"></script>
+    <script src="ProceduralSkyscraper.js"></script>
+    <script src="FighterAerodynamics.js"></script>
+    <script src="ObstacleSpikeFactory.js"></script>
+    <script src="Core67DataMatrix.js"></script>
+    <script src="CameraSpasmPhysics.js"></script>
+    <script src="ParticleSystemFX.js"></script>
+    <script src="UserInterfaceHUD.js"></script>
+    <script src="SoundAudioSynthesis.js"></script>
+</body>
+</html>
